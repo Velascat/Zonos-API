@@ -764,6 +764,19 @@ async def list_models():
 
 @app.on_event("startup")
 async def startup_event():
+    # Clear download wreckage BEFORE any load can resume it: a corrupt
+    # .incomplete partial wedges hf_hub_download's retries indefinitely
+    # (the 2026-08-03/04 outage needed a human to delete it). Age-guarded,
+    # never raises — see zonos.integrity.sweep_stale_partials.
+    from zonos.integrity import sweep_stale_partials
+
+    swept = sweep_stale_partials()
+    if swept:
+        logger.warning(
+            "Removed %d stale download partial(s) at startup: %s",
+            len(swept),
+            ", ".join(swept),
+        )
     hybrid_ready = log_backend_versions()
     load_models(skip_hybrid=not hybrid_ready)
     load_voice_embeddings()
